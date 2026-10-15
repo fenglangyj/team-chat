@@ -1,0 +1,15 @@
+# 编辑器与系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 本地产物与签名
+*.jks
+*.keystore
+app/android/key.properties
+app/android/local.properties
+
+# 临时下载
+_downloads/

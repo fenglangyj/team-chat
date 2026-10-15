@@ -1,0 +1,4 @@
+project_id = "team-chat"
+
+[functions.sweep]
+verify_jwt = true

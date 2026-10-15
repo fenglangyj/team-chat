@@ -1,0 +1,26 @@
+-- =============================================================
+-- 可选：为 24 小时自动清扫配置服务端定时任务（pg_cron + pg_net）
+-- 即使没有任何客户端在线，也会每小时清理一次过期数据。
+--
+-- 前置步骤（Supabase 控制台 → Database → Extensions）：
+--   启用 pg_cron 与 pg_net 两个扩展。
+--
+-- 然后把下面的 YOUR-PROJECT 和 YOUR-ANON-KEY 换成你自己的值后，
+-- 在 SQL Editor 中执行一次即可。
+-- （anon key 是公开信息，放在这里没有安全风险：sweep 只会删除过期数据。）
+-- =============================================================
+
+select cron.schedule(
+  'teamchat-sweep',
+  '7 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://YOUR-PROJECT.supabase.co/functions/v1/sweep',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer YOUR-ANON-KEY'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
