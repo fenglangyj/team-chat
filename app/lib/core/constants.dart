@@ -3,7 +3,7 @@ class AppInfo {
   static const String name = '团队通';
   static const String fullName = '团队通 TeamChat';
   static const String version = '1.0.0';
-  static const String repoUrl = 'https://github.com/TEAMCHAT_OWNER/team-chat';
+  static const String repoUrl = 'https://github.com/fenglangyj/team-chat';
 }
 
 /// 加密相关常量
