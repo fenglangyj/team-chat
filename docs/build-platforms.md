@@ -107,6 +107,11 @@ iOS 无法产出「开箱即用」的公共安装包：必须使用 Apple 开发
 
 > 注意：请使用 OHOS 分支的 flutter 命令操作本项目（Dart 依赖会自动解析到与该分支兼容的版本区间）。
 
+**已知限制（鸿蒙）**：
+
+- 社区 OHOS Flutter 分支的 Dart 版本通常低于官方 stable，`file_picker` 等插件会自动解析到较低版本；若解析失败，可在 `pubspec.yaml` 中临时放宽版本约束，并按所选插件版本的 API 微调 `lib/ui/screens/chat_screen.dart` 与 `lib/services/attachment_service.dart` 中的文件选择/保存调用。
+- `file_picker` 目前没有 OHOS 实现，鸿蒙端"选择图片/文件"需要接入鸿蒙平台对应的选择器插件（或在 OHOS 分支中自行实现 Platform Interface）。文本聊天、群聊、加密、24 小时销毁等核心功能不受影响。
+
 ## 自动发布（GitHub Actions）
 
 本仓库内置两条工作流：
