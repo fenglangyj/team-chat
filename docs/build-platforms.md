@@ -40,6 +40,13 @@ flutter build linux --release
 
 需要 JDK 17 与 Android SDK（Android Studio 安装后 `flutter doctor --android-licenses` 接受协议）。
 
+首次构建若提示 `NDK 28.2.13676358` 缺失，用安装器补装即可（约 1GB，仅首次）：
+
+```bash
+sdkmanager --install "ndk;28.2.13676358"    # 或新版命令行工具：sdkmanager --install "ndk/28.2.13676358"
+# 也可以在 Android Studio 的 SDK Manager → SDK Tools 勾选 NDK (Side by side) 安装
+```
+
 ```bash
 flutter build apk --release          # 通用 APK
 flutter build apk --split-per-abi    # 按架构拆分，体积更小

@@ -45,7 +45,7 @@
 
 ## 下载安装
 
-前往 **Releases** 页面下载对应平台安装包（每次发布版本都由 GitHub Actions 自动构建）：
+前往 **[Releases](https://github.com/fenglangyj/team-chat/releases/latest)** 页面下载对应平台安装包（每次发布版本都由 GitHub Actions 自动构建）：
 
 | 平台 | 文件 | 说明 |
 | --- | --- | --- |
