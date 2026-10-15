@@ -75,13 +75,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _pickAndSend({required bool image}) async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFile(
         type: image ? FileType.image : FileType.any,
-        withData: false,
+        dialogTitle: image ? '选择图片' : '选择文件',
       );
-      final picked = result?.files.singleOrNull;
-      if (picked == null || picked.path == null) return;
-      final file = File(picked.path!);
+      if (picked == null) return;
+      final path = picked.path;
+      if (path == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('无法读取所选文件')));
+        }
+        return;
+      }
+      final file = File(path);
       final name = picked.name;
       final mime = lookupMimeType(name) ??
           (image ? 'image/jpeg' : 'application/octet-stream');
@@ -93,7 +100,7 @@ class _ChatScreenState extends State<ChatScreen> {
         file: file,
         name: name,
         mime: mime,
-        size: await file.length(),
+        size: await picked.length() ?? await file.length(),
         isImage: image,
       );
       if (!mounted) return;

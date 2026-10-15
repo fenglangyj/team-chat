@@ -144,18 +144,22 @@ class AttachmentService {
     }
   }
 
-  /// 保存解密后的文件；桌面端弹出另存为对话框
+  /// 保存解密后的文件；弹出系统另存为对话框。
+  /// 返回保存后的路径；用户取消时返回 null（移动端部分平台不支持另存为，
+  /// 此时回退为返回临时文件路径，供调用方直接打开）。
   Future<String?> saveAs(File decrypted, String fileName) async {
-    if (_isDesktop) {
-      final target = await FilePicker.platform.saveFile(
-        dialogTitle: '保存文件',
+    final bytes = await decrypted.readAsBytes();
+    try {
+      final uri = await FilePicker.saveFile(
         fileName: _sanitize(fileName),
+        bytes: bytes,
+        dialogTitle: '保存文件',
       );
-      if (target == null) return null;
-      await decrypted.copy(target);
-      return target;
+      if (uri != null) return uri.toFilePath();
+      return _isDesktop ? null : decrypted.path;
+    } catch (_) {
+      return _isDesktop ? null : decrypted.path;
     }
-    return decrypted.path;
   }
 
   /// 清空会话时删除全部附件（存储对象 + 登记行）
