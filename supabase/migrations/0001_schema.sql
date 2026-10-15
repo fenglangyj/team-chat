@@ -17,23 +17,8 @@ exception when others then
   return null;
 end $$;
 
--- 当前用户是否为某会话成员（security definer，避免 RLS 递归）
-create or replace function public.is_member(conv uuid, uid uuid default auth.uid())
-returns boolean
-language sql stable security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.conversation_members m
-    where m.conversation_id = conv and m.user_id = uid
-  );
-$$;
-
 revoke all on function public.try_uuid(text) from public, anon;
 grant execute on function public.try_uuid(text) to authenticated;
-
-revoke all on function public.is_member(uuid, uuid) from public, anon;
-grant execute on function public.is_member(uuid, uuid) to authenticated;
 
 -- ---------- 表结构 ----------
 
@@ -104,9 +89,11 @@ create table if not exists public.attachments (
 create index if not exists idx_attachments_orphans
   on public.attachments (created_at) where message_id is null;
 
-alter table public.messages
-  add constraint messages_attachment_fk
-  foreign key (attachment_id) references public.attachments(id) on delete set null;
+do $$ begin
+  alter table public.messages
+    add constraint messages_attachment_fk
+    foreign key (attachment_id) references public.attachments(id) on delete set null;
+exception when duplicate_object then null; end $$;
 
 -- 密钥分发请求（新成员加入全员群等场景，等待在线成员把 CEK 封装给他）
 create table if not exists public.key_requests (
@@ -115,6 +102,23 @@ create table if not exists public.key_requests (
   created_at timestamptz not null default now(),
   primary key (conversation_id, user_id)
 );
+
+-- ---------- 函数（依赖表结构，须在建表之后创建） ----------
+
+-- 当前用户是否为某会话成员（security definer，避免 RLS 递归）
+create or replace function public.is_member(conv uuid, uid uuid default auth.uid())
+returns boolean
+language sql stable security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.conversation_members m
+    where m.conversation_id = conv and m.user_id = uid
+  );
+$$;
+
+revoke all on function public.is_member(uuid, uuid) from public, anon;
+grant execute on function public.is_member(uuid, uuid) to authenticated;
 
 -- ---------- 行级安全 ----------
 
@@ -126,53 +130,69 @@ alter table public.attachments enable row level security;
 alter table public.key_requests enable row level security;
 
 -- profiles：团队内可见（公钥与昵称本就是团队公开信息）
+drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles
   for select to authenticated using (true);
+drop policy if exists profiles_insert on public.profiles;
 create policy profiles_insert on public.profiles
   for insert to authenticated with check (id = auth.uid());
+drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles
   for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
 -- conversations：仅成员可见；创建走 RPC
+drop policy if exists conv_select on public.conversations;
 create policy conv_select on public.conversations
   for select to authenticated using (public.is_member(id));
 
 -- conversation_members：成员互见；只能给他人的空槽位分发密钥，或更新自己的密钥
+drop policy if exists members_select on public.conversation_members;
 create policy members_select on public.conversation_members
   for select to authenticated using (public.is_member(conversation_id));
+drop policy if exists members_update on public.conversation_members;
 create policy members_update on public.conversation_members
   for update to authenticated
   using (public.is_member(conversation_id) and (wrapped_key is null or user_id = auth.uid()))
   with check (public.is_member(conversation_id) and wrapped_key is not null);
 
 -- messages：成员可读、可发、可删（任何人可清空会话）；消息不可修改
+drop policy if exists messages_select on public.messages;
 create policy messages_select on public.messages
   for select to authenticated using (public.is_member(conversation_id));
+drop policy if exists messages_insert on public.messages;
 create policy messages_insert on public.messages
   for insert to authenticated
   with check (sender_id = auth.uid() and public.is_member(conversation_id));
+drop policy if exists messages_delete on public.messages;
 create policy messages_delete on public.messages
   for delete to authenticated using (public.is_member(conversation_id));
 
 -- attachments
+drop policy if exists attachments_select on public.attachments;
 create policy attachments_select on public.attachments
   for select to authenticated using (public.is_member(conversation_id));
+drop policy if exists attachments_insert on public.attachments;
 create policy attachments_insert on public.attachments
   for insert to authenticated
   with check (uploader_id = auth.uid() and public.is_member(conversation_id));
+drop policy if exists attachments_update on public.attachments;
 create policy attachments_update on public.attachments
   for update to authenticated
   using (public.is_member(conversation_id))
   with check (public.is_member(conversation_id));
+drop policy if exists attachments_delete on public.attachments;
 create policy attachments_delete on public.attachments
   for delete to authenticated using (public.is_member(conversation_id));
 
 -- key_requests
+drop policy if exists keyreq_select on public.key_requests;
 create policy keyreq_select on public.key_requests
   for select to authenticated using (public.is_member(conversation_id));
+drop policy if exists keyreq_insert on public.key_requests;
 create policy keyreq_insert on public.key_requests
   for insert to authenticated
   with check (user_id = auth.uid() and public.is_member(conversation_id));
+drop policy if exists keyreq_delete on public.key_requests;
 create policy keyreq_delete on public.key_requests
   for delete to authenticated using (public.is_member(conversation_id));
 
