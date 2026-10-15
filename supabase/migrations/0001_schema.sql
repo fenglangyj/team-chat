@@ -279,12 +279,12 @@ begin
   if not public.is_member(conv, me) then raise exception 'not a member'; end if;
 
   for item in select * from jsonb_array_elements(coalesce(members, '[]'::jsonb)) loop
-    insert into public.conversation_members (conversation_id, user_id, wrapped_key, key_nonce, wrapped_by)
+    insert into public.conversation_members as cm (conversation_id, user_id, wrapped_key, key_nonce, wrapped_by)
     values (conv, (item->>'user_id')::uuid, item->>'wrapped_key', item->>'key_nonce', me)
     on conflict (conversation_id, user_id) do update
-      set wrapped_key = coalesce(public.conversation_members.wrapped_key, excluded.wrapped_key),
-          key_nonce = coalesce(public.conversation_members.key_nonce, excluded.key_nonce),
-          wrapped_by = coalesce(public.conversation_members.wrapped_by, excluded.wrapped_by);
+      set wrapped_key = coalesce(cm.wrapped_key, excluded.wrapped_key),
+          key_nonce = coalesce(cm.key_nonce, excluded.key_nonce),
+          wrapped_by = coalesce(cm.wrapped_by, excluded.wrapped_by);
     delete from public.key_requests
       where conversation_id = conv and user_id = (item->>'user_id')::uuid
         and exists (
@@ -322,12 +322,12 @@ begin
     end;
   end if;
 
-  insert into public.conversation_members (conversation_id, user_id, wrapped_key, key_nonce, wrapped_by)
+  insert into public.conversation_members as cm (conversation_id, user_id, wrapped_key, key_nonce, wrapped_by)
   values (cid, me, my_wrapped_key, my_key_nonce, me)
   on conflict (conversation_id, user_id) do update
-    set wrapped_key = coalesce(public.conversation_members.wrapped_key, excluded.wrapped_key),
-        key_nonce   = coalesce(public.conversation_members.key_nonce, excluded.key_nonce),
-        wrapped_by  = coalesce(public.conversation_members.wrapped_by, excluded.wrapped_by);
+    set wrapped_key = coalesce(cm.wrapped_key, excluded.wrapped_key),
+        key_nonce   = coalesce(cm.key_nonce, excluded.key_nonce),
+        wrapped_by  = coalesce(cm.wrapped_by, excluded.wrapped_by);
 
   return cid;
 end $$;
