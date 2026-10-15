@@ -106,7 +106,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ matrix.file }}
-          generate_release_notes: true
+          # 仅由一个任务生成 release notes，避免多个任务重复追加
+          generate_release_notes: ${{ matrix.target == 'windows' }}
 
       - name: Upload workflow artifact (manual run)
         if: "!startsWith(github.ref, 'refs/tags/')"
