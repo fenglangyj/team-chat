@@ -57,6 +57,15 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Preinstall Android NDK
+        if: matrix.target == 'apk'
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ ! -d "$SDK/ndk/28.2.13676358" ]; then
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" \
+              || yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "ndk/28.2.13676358"
+          fi
+
       - name: Build Windows
         if: matrix.target == 'windows'
         run: flutter build windows --release
