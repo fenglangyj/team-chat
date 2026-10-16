@@ -31,10 +31,13 @@ flutter build macos --release
 ## Linux
 
 ```bash
-sudo apt-get install -y ninja-build libgtk-3-dev clang cmake pkg-config liblzma-dev
+sudo apt-get install -y ninja-build libgtk-3-dev clang cmake pkg-config liblzma-dev \
+  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 flutter build linux --release
 # 产物：build/linux/x64/release/bundle/（可执行文件 team_chat + 依赖库）
 ```
+
+> 提示音功能使用 audioplayers，其在 Linux 上依赖 GStreamer：构建时需要上面的 dev 包，运行环境需要 gstreamer 运行时库（主流桌面发行版默认已包含）。
 
 ## Android
 
