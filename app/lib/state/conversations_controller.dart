@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 
 import '../core/constants.dart';
@@ -33,8 +34,21 @@ class ConversationsController extends ChangeNotifier {
     _activeConversationId = conversationId;
     if (conversationId != null && unreadOf(conversationId) != 0) {
       unreadCounts[conversationId] = 0;
-      notifyListeners();
+      notifySafely();
     }
+  }
+
+  /// 由聊天界面在销毁时调用：仅当该会话仍是当前会话时才清除标记
+  /// （避免双栏切换时旧面板的 dispose 晚于新面板的 initState，
+  /// 把新面板刚设置的标记误清除）
+  void clearActiveConversation(String conversationId) {
+    if (_activeConversationId != conversationId) return;
+    _activeConversationId = null;
+  }
+
+  /// 窗口失去焦点：此后当前会话的新消息也计未读并响铃
+  void markWindowBlurred() {
+    _windowFocused = false;
   }
 
   /// 窗口重新获得焦点：正在查看的会话自动清零未读
@@ -43,6 +57,18 @@ class ConversationsController extends ChangeNotifier {
     final id = _activeConversationId;
     if (id != null && unreadOf(id) != 0) {
       unreadCounts[id] = 0;
+      notifySafely();
+    }
+  }
+
+  /// 通知监听者；如果在构建/布局阶段被调用（如 ChatScreen.initState），
+  /// 延迟到当前帧结束后再通知，避免 markNeedsBuild during build 异常
+  void notifySafely() {
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => notifyListeners());
+    } else {
       notifyListeners();
     }
   }

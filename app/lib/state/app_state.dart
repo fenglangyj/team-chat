@@ -17,7 +17,7 @@ import 'conversations_controller.dart';
 
 enum AppPhase { booting, setup, login, unlock, ready }
 
-/// 桌面端窗口焦点监听：重新聚焦时通知会话控制器清零当前会话未读
+/// 桌面端窗口焦点监听：聚焦时清零当前会话未读；失焦时开始计未读并响铃
 class _AppFocusListener with WindowListener {
   final AppState app;
 
@@ -26,6 +26,11 @@ class _AppFocusListener with WindowListener {
   @override
   void onWindowFocus() {
     app.conversations?.markWindowFocused();
+  }
+
+  @override
+  void onWindowBlur() {
+    app.conversations?.markWindowBlurred();
   }
 }
 

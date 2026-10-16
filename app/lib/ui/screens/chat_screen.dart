@@ -57,7 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _keyRetryTimer?.cancel();
-    _app.conversations?.setActiveConversation(null);
+    _app.conversations?.clearActiveConversation(widget.conversation.id);
     _app.conversations?.removeListener(_onConversationsChanged);
     _scroll.dispose();
     _input.dispose();
