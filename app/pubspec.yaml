@@ -1,7 +1,7 @@
 name: team_chat
 description: "团队通 TeamChat - 面向团队内部的端到端加密聊天工具"
 publish_to: "none"
-version: 1.0.2+3
+version: 1.1.0+4
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
@@ -14,6 +14,7 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.2
   file_picker: ^13.1.0
+  pasteboard: ^0.5.0
   path_provider: ^2.1.4
   open_filex: ^4.5.0
   mime: ^1.0.5
