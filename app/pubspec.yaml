@@ -1,7 +1,7 @@
 name: team_chat
 description: "团队通 TeamChat - 面向团队内部的端到端加密聊天工具"
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

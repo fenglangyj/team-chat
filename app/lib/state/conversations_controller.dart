@@ -35,6 +35,23 @@ class ConversationsController extends ChangeNotifier {
     await refreshConversations();
     await refreshPreviews();
     _subscribe();
+    // 处理离线期间积压的密钥请求（实时通道只推送新事件）
+    await respondToPendingRequests();
+  }
+
+  /// 扫描并响应我可见的、他人尚未拿到密钥的会话（补偿离线期间错过的事件）
+  Future<void> respondToPendingRequests() async {
+    try {
+      final rows = await client
+          .from(Db.keyRequests)
+          .select('conversation_id, user_id');
+      for (final row in rows) {
+        final convId = row['conversation_id'] as String?;
+        final userId = row['user_id'] as String?;
+        if (convId == null || userId == null) continue;
+        await _respondToKeyRequest(convId, userId);
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshProfiles() async {
@@ -179,10 +196,15 @@ class ConversationsController extends ChangeNotifier {
     if (_keyFlights.contains(flightKey)) return;
     _keyFlights.add(flightKey);
     try {
-      await client.from(Db.keyRequests).upsert(
+      // 先删后插：确保每次都产生一次 Realtime INSERT 事件，
+      // 让此刻在线的成员一定能收到并分发密钥
+      await client
+          .from(Db.keyRequests)
+          .delete()
+          .eq('conversation_id', convId)
+          .eq('user_id', session.me.id);
+      await client.from(Db.keyRequests).insert(
         {'conversation_id': convId, 'user_id': session.me.id},
-        onConflict: 'conversation_id,user_id',
-        ignoreDuplicates: true,
       );
     } catch (_) {
     } finally {

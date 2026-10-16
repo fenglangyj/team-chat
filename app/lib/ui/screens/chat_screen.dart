@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -28,6 +29,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scroll = ScrollController();
   final _input = TextEditingController();
   final _inputFocus = FocusNode();
+  Timer? _keyRetryTimer;
 
   @override
   void initState() {
@@ -35,10 +37,16 @@ class _ChatScreenState extends State<ChatScreen> {
     _chat.init();
     _scroll.addListener(_onScroll);
     _app.conversations?.addListener(_onConversationsChanged);
+    // 等待密钥期间每 30 秒自动重新请求一次（对方上线后能马上收到）
+    _keyRetryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (!mounted || !_chat.waitingKey) return;
+      _app.conversations?.requestKeyFor(widget.conversation.id);
+    });
   }
 
   @override
   void dispose() {
+    _keyRetryTimer?.cancel();
     _app.conversations?.removeListener(_onConversationsChanged);
     _scroll.dispose();
     _input.dispose();
