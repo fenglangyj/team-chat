@@ -105,9 +105,12 @@ class _ConversationInfoScreenState extends State<ConversationInfoScreen> {
             child: ProfileAvatar(
               name: name,
               radius: 34,
-              icon: conv.kind == ConversationKind.group &&
-                      !conv.isDefaultGroup
-                  ? Icons.groups
+              icon: conv.kind == ConversationKind.group ? Icons.groups : null,
+              backgroundColor: conv.isDefaultGroup
+                  ? scheme.tertiaryContainer
+                  : null,
+              foregroundColor: conv.isDefaultGroup
+                  ? scheme.onTertiaryContainer
                   : null,
             ),
           ),

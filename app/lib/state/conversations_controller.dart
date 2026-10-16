@@ -234,7 +234,8 @@ class ConversationsController extends ChangeNotifier {
     if (cek == null) return;
     final flightKey = 'provide:$convId:$userId';
     if (_keyFlights.contains(flightKey)) return;
-    final target = profiles[userId];
+    // 成员资料可能是在本客户端启动之后才注册的，按需从数据库拉取
+    final target = await ensureProfile(userId);
     if (target == null) return;
     _keyFlights.add(flightKey);
     try {
@@ -248,6 +249,25 @@ class ConversationsController extends ChangeNotifier {
     } catch (_) {
     } finally {
       _keyFlights.remove(flightKey);
+    }
+  }
+
+  /// 获取成员资料（内存缓存优先，缺失时从数据库拉取并缓存）
+  Future<MemberProfile?> ensureProfile(String userId) async {
+    final cached = profiles[userId];
+    if (cached != null) return cached;
+    try {
+      final row = await client
+          .from(Db.profiles)
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+      if (row == null) return null;
+      final profile = MemberProfile.fromRow(row);
+      profiles[userId] = profile;
+      return profile;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -452,6 +472,9 @@ class ConversationsController extends ChangeNotifier {
     } else {
       list.add(m);
     }
+
+    // 新成员可能在本客户端启动后注册，补齐资料
+    await ensureProfile(m.userId);
 
     if (m.userId == session.me.id && m.hasKey && !hasKeyFor(m.conversationId)) {
       await session.unlockCek(m.conversationId, m.wrappedKey!);

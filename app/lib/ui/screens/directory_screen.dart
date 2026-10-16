@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
 import '../widgets/avatar.dart';
+import 'group_create_screen.dart';
 
 /// 团队通讯录：单选（发起私聊）或多选（加群成员）
 class DirectoryScreen extends StatefulWidget {
@@ -11,11 +12,15 @@ class DirectoryScreen extends StatefulWidget {
   final bool multiSelect;
   final Set<String> excludeIds;
 
+  /// 是否在顶部显示「新建群聊」入口（单选模式下）
+  final bool showGroupCreate;
+
   const DirectoryScreen({
     super.key,
     required this.title,
     this.multiSelect = false,
     this.excludeIds = const {},
+    this.showGroupCreate = false,
   });
 
   @override
@@ -104,30 +109,64 @@ class _DirectoryScreenState extends State<DirectoryScreen> {
             ),
           ),
           Expanded(
-            child: members.isEmpty
-                ? const Center(
-                    child: Text('没有可选的成员\n（让同事用相同的 URL 和 KEY 注册即可加入）',
-                        textAlign: TextAlign.center),
-                  )
-                : ListView.builder(
-                    itemCount: members.length,
-                    itemBuilder: (context, index) {
-                      final p = members[index];
-                      final checked = _selected.contains(p.id);
-                      return ListTile(
-                        leading: ProfileAvatar(name: p.nickname),
-                        title: Text(p.nickname),
-                        subtitle: Text('@${p.account}'),
-                        trailing: widget.multiSelect
-                            ? Checkbox(
-                                value: checked,
-                                onChanged: (_) => _onTap(p),
-                              )
-                            : const Icon(Icons.chevron_right),
-                        onTap: () => _onTap(p),
+            child: Column(
+              children: [
+                if (widget.showGroupCreate && !widget.multiSelect) ...[
+                  ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor:
+                          Theme.of(context).colorScheme.secondaryContainer,
+                      child: Icon(
+                        Icons.group_add_outlined,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSecondaryContainer,
+                      ),
+                    ),
+                    title: const Text('新建群聊'),
+                    subtitle: const Text('选择成员创建新的群组'),
+                    onTap: () async {
+                      final conv = await Navigator.of(context)
+                          .push<Conversation>(
+                        MaterialPageRoute(
+                          builder: (_) => const GroupCreateScreen(),
+                        ),
                       );
+                      if (conv != null && context.mounted) {
+                        Navigator.of(context).pop(conv);
+                      }
                     },
                   ),
+                  const Divider(height: 1),
+                ],
+                Expanded(
+                  child: members.isEmpty
+                      ? const Center(
+                          child: Text('没有可选的成员\n（让同事用相同的 URL 和 KEY 注册即可加入）',
+                              textAlign: TextAlign.center),
+                        )
+                      : ListView.builder(
+                          itemCount: members.length,
+                          itemBuilder: (context, index) {
+                            final p = members[index];
+                            final checked = _selected.contains(p.id);
+                            return ListTile(
+                              leading: ProfileAvatar(name: p.nickname),
+                              title: Text(p.nickname),
+                              subtitle: Text('@${p.account}'),
+                              trailing: widget.multiSelect
+                                  ? Checkbox(
+                                      value: checked,
+                                      onChanged: (_) => _onTap(p),
+                                    )
+                                  : const Icon(Icons.chevron_right),
+                              onTap: () => _onTap(p),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

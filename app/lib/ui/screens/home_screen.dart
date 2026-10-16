@@ -9,7 +9,6 @@ import '../../state/conversations_controller.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
 import 'directory_screen.dart';
-import 'group_create_screen.dart';
 import 'settings_screen.dart';
 
 /// 会话列表（桌面端：左侧列表 + 右侧聊天；移动端：列表 + 页面跳转）
@@ -49,65 +48,47 @@ class _HomeScreenState extends State<HomeScreen> {
     _openChat(context, conv);
   }
 
-  void _showNewConversationSheet(BuildContext context, {required bool wide}) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: const Text('发起私聊'),
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final result = await Navigator.of(context).push<MemberProfile>(
-                  MaterialPageRoute(
-                    builder: (_) => const DirectoryScreen(title: '发起私聊'),
-                  ),
-                );
-                if (result == null || !context.mounted) return;
-                final app = context.read<AppState>();
-                final convos = app.conversations;
-                if (convos == null) return;
-                try {
-                  final conv = await convos.startDirect(result);
-                  if (!context.mounted) return;
-                  if (wide) {
-                    setState(() => _selectedId = conv.id);
-                  } else {
-                    _openChat(context, conv);
-                  }
-                } catch (e) {
-                  if (!context.mounted) return;
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('创建失败：$e')));
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.groups_outlined),
-              title: const Text('新建群聊'),
-              onTap: () async {
-                Navigator.of(sheetContext).pop();
-                final conv = await Navigator.of(context).push<Conversation>(
-                  MaterialPageRoute(
-                    builder: (_) => const GroupCreateScreen(),
-                  ),
-                );
-                if (conv == null || !context.mounted) return;
-                if (wide) {
-                  setState(() => _selectedId = conv.id);
-                } else {
-                  _openChat(context, conv);
-                }
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+  /// 打开团队成员（通讯录）：发起私聊或新建群聊
+  Future<void> _openDirectory(BuildContext context,
+      {required bool wide}) async {
+    final result = await Navigator.of(context).push<Object>(
+      MaterialPageRoute(
+        builder: (_) => const DirectoryScreen(
+          title: '团队成员',
+          showGroupCreate: true,
         ),
       ),
+    );
+    if (result == null || !context.mounted) return;
+    final app = context.read<AppState>();
+    final convos = app.conversations;
+    if (convos == null) return;
+    try {
+      Conversation? conv;
+      if (result is Conversation) {
+        conv = result;
+      } else if (result is MemberProfile) {
+        conv = await convos.startDirect(result);
+      }
+      if (conv == null || !context.mounted) return;
+      if (wide) {
+        setState(() => _selectedId = conv!.id);
+      } else {
+        _openChat(context, conv);
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('创建失败：$e')));
+    }
+  }
+
+  Widget _buildDirectoryTile(BuildContext context, {required bool wide}) {
+    return ListTile(
+      leading: const Icon(Icons.people_alt_outlined),
+      title: const Text('团队成员'),
+      subtitle: const Text('发起私聊 / 新建群聊'),
+      onTap: () => _openDirectory(context, wide: wide),
     );
   }
 
@@ -155,21 +136,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? _buildWide(context, convos)
                   : _buildNarrow(context, convos),
             ),
-      floatingActionButton: convos == null
-          ? null
-          : FloatingActionButton(
-              onPressed: () =>
-                  _showNewConversationSheet(context, wide: wide),
-              tooltip: '新会话',
-              child: const Icon(Icons.add),
-            ),
     );
   }
 
   Widget _buildNarrow(BuildContext context, ConversationsController convos) {
-    return RefreshIndicator(
-      onRefresh: () => _refresh(convos),
-      child: _buildList(context, convos, wide: false),
+    return Column(
+      children: [
+        _buildDirectoryTile(context, wide: false),
+        const Divider(height: 1),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _refresh(convos),
+            child: _buildList(context, convos, wide: false),
+          ),
+        ),
+      ],
     );
   }
 
@@ -235,6 +216,8 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         const Divider(height: 1),
+        _buildDirectoryTile(context, wide: true),
+        const Divider(height: 1),
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => _refresh(convos),
@@ -283,15 +266,18 @@ class _HomeScreenState extends State<HomeScreen> {
         final unread = convos.unreadOf(conv.id);
         final selected = wide && conv.id == _selectedId;
 
+        final isGroup = conv.kind == ConversationKind.group;
         return ListTile(
           selected: selected,
           selectedTileColor: scheme.primary.withValues(alpha: 0.08),
           leading: ProfileAvatar(
             name: name,
-            icon: conv.kind == ConversationKind.group &&
-                    !conv.isDefaultGroup
-                ? Icons.groups
-                : null,
+            // 群聊：群组图标（全员群使用特殊配色），私聊：昵称首字头像
+            icon: isGroup ? Icons.groups : null,
+            backgroundColor:
+                conv.isDefaultGroup ? scheme.tertiaryContainer : null,
+            foregroundColor:
+                conv.isDefaultGroup ? scheme.onTertiaryContainer : null,
           ),
           title: Text(
             name,
