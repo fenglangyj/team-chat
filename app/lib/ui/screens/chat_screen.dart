@@ -44,6 +44,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _chat.init();
+    _app.conversations?.setActiveConversation(widget.conversation.id);
     _scroll.addListener(_onScroll);
     _app.conversations?.addListener(_onConversationsChanged);
     // 等待密钥期间每 30 秒自动重新请求一次（对方上线后能马上收到）
@@ -56,6 +57,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _keyRetryTimer?.cancel();
+    _app.conversations?.setActiveConversation(null);
     _app.conversations?.removeListener(_onConversationsChanged);
     _scroll.dispose();
     _input.dispose();
@@ -110,9 +112,6 @@ class _ChatScreenState extends State<ChatScreen> {
       final mime = lookupMimeType(name) ??
           (image ? 'image/jpeg' : 'application/octet-stream');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('正在加密上传 $name …')),
-      );
       final err = await _chat.sendFile(
         file: file,
         name: name,
@@ -197,9 +196,6 @@ class _ChatScreenState extends State<ChatScreen> {
       await file.writeAsBytes(bytes, flush: true);
       final name = '截图_${_stamp()}.png';
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('正在加密上传 $name …')),
-      );
       final err = await _chat.sendFile(
         file: file,
         name: name,
@@ -240,9 +236,6 @@ class _ChatScreenState extends State<ChatScreen> {
         const SnackBar(content: Text('一次最多发送 10 个文件，已取前 10 个')),
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('正在加密上传 ${list.length} 个文件…')),
-    );
     var failed = 0;
     for (final path in list) {
       final file = File(path);
@@ -452,7 +445,36 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_chat.uploadProgress != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: LinearProgressIndicator(value: _chat.uploadProgress),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '正在加密上传 ${_chat.uploadName ?? ''}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${((_chat.uploadProgress ?? 0) * 100).round()}%',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(value: _chat.uploadProgress),
+                ],
+              ),
             ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,

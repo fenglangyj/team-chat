@@ -6,6 +6,7 @@ import '../core/utils.dart';
 import '../models/models.dart';
 import '../services/chat_crypto.dart';
 import '../services/session.dart';
+import '../services/sound_service.dart';
 import 'app_state.dart';
 
 /// 会话列表 / 成员 / 密钥分发 / 实时同步
@@ -19,6 +20,21 @@ class ConversationsController extends ChangeNotifier {
   final Map<String, Message> lastMessages = {};
   final Map<String, String> _groupNames = {};
   final Set<String> _keyFlights = {};
+
+  /// 未读消息数（仅统计对方发来的、且不在当前打开会话的消息）
+  final Map<String, int> unreadCounts = {};
+  String? _activeConversationId;
+
+  int unreadOf(String conversationId) => unreadCounts[conversationId] ?? 0;
+
+  /// 由聊天界面标记当前打开的会话（用于未读清零与提示音判断）
+  void setActiveConversation(String? conversationId) {
+    _activeConversationId = conversationId;
+    if (conversationId != null && unreadOf(conversationId) != 0) {
+      unreadCounts[conversationId] = 0;
+      notifyListeners();
+    }
+  }
 
   RealtimeChannel? _convChannel;
   RealtimeChannel? _memberChannel;
@@ -414,6 +430,12 @@ class ConversationsController extends ChangeNotifier {
           callback: (payload) async {
             final m = Message.fromRow(payload.newRecord);
             lastMessages[m.conversationId] = m;
+            if (m.senderId != session.me.id &&
+                m.conversationId != _activeConversationId) {
+              unreadCounts[m.conversationId] =
+                  (unreadCounts[m.conversationId] ?? 0) + 1;
+              SoundService.instance.play();
+            }
             await decryptPreviews();
             notifyListeners();
           },

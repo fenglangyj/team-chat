@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,9 +12,22 @@ import 'directory_screen.dart';
 import 'group_create_screen.dart';
 import 'settings_screen.dart';
 
-/// 会话列表
-class HomeScreen extends StatelessWidget {
+/// 会话列表（桌面端：左侧列表 + 右侧聊天；移动端：列表 + 页面跳转）
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String? _selectedId;
+
+  static bool get _isDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   Future<void> _openChat(BuildContext context, Conversation conversation) async {
     final app = context.read<AppState>();
@@ -22,11 +36,20 @@ class HomeScreen extends StatelessWidget {
         builder: (_) => ChatScreen(conversation: conversation),
       ),
     );
-    // 返回后刷新预览
     await app.conversations?.refreshPreviews();
   }
 
-  void _showNewConversationSheet(BuildContext context) {
+  void _onConversationTap(
+      BuildContext context, ConversationsController convos, Conversation conv,
+      {required bool wide}) {
+    if (wide) {
+      setState(() => _selectedId = conv.id);
+      return;
+    }
+    _openChat(context, conv);
+  }
+
+  void _showNewConversationSheet(BuildContext context, {required bool wide}) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -51,7 +74,11 @@ class HomeScreen extends StatelessWidget {
                 try {
                   final conv = await convos.startDirect(result);
                   if (!context.mounted) return;
-                  _openChat(context, conv);
+                  if (wide) {
+                    setState(() => _selectedId = conv.id);
+                  } else {
+                    _openChat(context, conv);
+                  }
                 } catch (e) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context)
@@ -70,7 +97,11 @@ class HomeScreen extends StatelessWidget {
                   ),
                 );
                 if (conv == null || !context.mounted) return;
-                _openChat(context, conv);
+                if (wide) {
+                  setState(() => _selectedId = conv.id);
+                } else {
+                  _openChat(context, conv);
+                }
               },
             ),
             const SizedBox(height: 8),
@@ -86,53 +117,145 @@ class HomeScreen extends StatelessWidget {
     final convos = app.conversations;
     final scheme = Theme.of(context).colorScheme;
 
+    final wide =
+        _isDesktop && MediaQuery.sizeOf(context).width >= 820;
+
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Icon(Icons.forum_outlined, color: scheme.primary),
-            const SizedBox(width: 8),
-            const Text('团队通', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: '设置',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+      appBar: wide
+          ? null
+          : AppBar(
+              title: Row(
+                children: [
+                  Icon(Icons.forum_outlined, color: scheme.primary),
+                  const SizedBox(width: 8),
+                  const Text('团队通',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  tooltip: '设置',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '退出登录',
+                  icon: const Icon(Icons.logout),
+                  onPressed: () => _confirmSignOut(context),
+                ),
+              ],
             ),
-          ),
-          IconButton(
-            tooltip: '退出登录',
-            icon: const Icon(Icons.logout),
-            onPressed: () => _confirmSignOut(context),
-          ),
-        ],
-      ),
       body: convos == null
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                await convos.refreshProfiles();
-                await convos.refreshConversations();
-                await convos.refreshPreviews();
-              },
-              child: _buildList(context, app, convos),
+          : ListenableBuilder(
+              listenable: convos,
+              builder: (context, _) => wide
+                  ? _buildWide(context, convos)
+                  : _buildNarrow(context, convos),
             ),
       floatingActionButton: convos == null
           ? null
           : FloatingActionButton(
-              onPressed: () => _showNewConversationSheet(context),
+              onPressed: () =>
+                  _showNewConversationSheet(context, wide: wide),
               tooltip: '新会话',
               child: const Icon(Icons.add),
             ),
     );
   }
 
+  Widget _buildNarrow(BuildContext context, ConversationsController convos) {
+    return RefreshIndicator(
+      onRefresh: () => _refresh(convos),
+      child: _buildList(context, convos, wide: false),
+    );
+  }
+
+  Widget _buildWide(BuildContext context, ConversationsController convos) {
+    Conversation? selected;
+    for (final c in convos.conversations) {
+      if (c.id == _selectedId) {
+        selected = c;
+        break;
+      }
+    }
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 320,
+          child: _buildSidebar(context, convos),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: selected == null
+              ? const _ChatPlaceholder()
+              : ChatScreen(
+                  key: ValueKey(selected.id),
+                  conversation: selected,
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSidebar(BuildContext context, ConversationsController convos) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Material(
+          color: scheme.surface,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+            child: Row(
+              children: [
+                Icon(Icons.forum_outlined, color: scheme.primary, size: 22),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text('团队通',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                IconButton(
+                  tooltip: '设置',
+                  icon: const Icon(Icons.settings_outlined, size: 20),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '退出登录',
+                  icon: const Icon(Icons.logout, size: 20),
+                  onPressed: () => _confirmSignOut(context),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () => _refresh(convos),
+            child: _buildList(context, convos, wide: true),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _refresh(ConversationsController convos) async {
+    await convos.refreshProfiles();
+    await convos.refreshConversations();
+    await convos.refreshPreviews();
+  }
+
   Widget _buildList(
-      BuildContext context, AppState app, ConversationsController convos) {
+      BuildContext context, ConversationsController convos,
+      {required bool wide}) {
     final list = convos.sorted;
+    final scheme = Theme.of(context).colorScheme;
     if (list.isEmpty) {
       return ListView(
         children: const [
@@ -157,7 +280,12 @@ class HomeScreen extends StatelessWidget {
         final name = convos.displayName(conv);
         final last = convos.lastMessages[conv.id];
         final hasKey = convos.hasKeyFor(conv.id);
+        final unread = convos.unreadOf(conv.id);
+        final selected = wide && conv.id == _selectedId;
+
         return ListTile(
+          selected: selected,
+          selectedTileColor: scheme.primary.withValues(alpha: 0.08),
           leading: ProfileAvatar(
             name: name,
             icon: conv.kind == ConversationKind.group &&
@@ -187,21 +315,41 @@ class HomeScreen extends StatelessWidget {
                   formatTime(last.createdAt),
                   style: TextStyle(
                     fontSize: 11,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
-              if (!hasKey)
+              if (unread > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: TextStyle(
+                        color: scheme.onPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+              else if (!hasKey)
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
                   child: Icon(
                     Icons.lock_clock,
                     size: 14,
-                    color: Theme.of(context).colorScheme.outline,
+                    color: scheme.outline,
                   ),
                 ),
             ],
           ),
-          onTap: () => _openChat(context, conv),
+          onTap: () => _onConversationTap(context, convos, conv, wide: wide),
         );
       },
     );
@@ -224,6 +372,28 @@ class HomeScreen extends StatelessWidget {
               context.read<AppState>().signOut();
             },
             child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatPlaceholder extends StatelessWidget {
+  const _ChatPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.forum_outlined, size: 56, color: scheme.outline),
+          const SizedBox(height: 12),
+          Text(
+            '选择左侧的会话开始聊天',
+            style: TextStyle(color: scheme.onSurfaceVariant),
           ),
         ],
       ),

@@ -177,6 +177,13 @@ class SettingsScreen extends StatelessWidget {
             subtitle: const Text('密码同时用于加密你的密钥'),
             onTap: () => _changePassword(context),
           ),
+          SwitchListTile(
+            secondary: const Icon(Icons.volume_up_outlined),
+            title: const Text('消息提示音'),
+            subtitle: const Text('仅非当前会话的新消息响铃'),
+            value: app.soundEnabled,
+            onChanged: (v) => context.read<AppState>().setSoundEnabled(v),
+          ),
           ListTile(
             leading: const Icon(Icons.dns_outlined),
             title: const Text('服务器配置'),

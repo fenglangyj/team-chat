@@ -1,11 +1,13 @@
-import 'dart:typed_data';
+import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:open_filex/open_filex.dart';
 
 import '../../core/utils.dart';
 import '../../models/models.dart';
 import '../../state/app_state.dart';
+import '../windows/image_preview_window.dart';
 
 class MessageBubble extends StatelessWidget {
   final Message message;
@@ -114,8 +116,15 @@ class _ImageCard extends StatefulWidget {
 
 class _ImageCardState extends State<_ImageCard> {
   Uint8List? _bytes;
+  File? _file;
   bool _loading = false;
   String? _error;
+
+  static bool get _isDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   Future<void> _load() async {
     final attachmentId = widget.message.attachmentId;
@@ -125,13 +134,18 @@ class _ImageCardState extends State<_ImageCard> {
       _error = null;
     });
     try {
-      final bytes = await widget.app.attachments.downloadImageBytes(
+      final file = await widget.app.attachments.downloadDecrypted(
         conversationId: widget.message.conversationId,
         attachmentId: attachmentId,
+        suggestedName: widget.message.fileName,
       );
+      final bytes = await file.readAsBytes();
       if (!mounted) return;
-      setState(() => _bytes = bytes);
-      _showPreview();
+      setState(() {
+        _bytes = bytes;
+        _file = file;
+      });
+      await _showPreview();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '下载失败：$e');
@@ -140,9 +154,19 @@ class _ImageCardState extends State<_ImageCard> {
     }
   }
 
-  void _showPreview() {
+  /// 桌面端：独立预览窗口（失败时回退弹窗）；移动端：应用内弹窗
+  Future<void> _showPreview() async {
     final bytes = _bytes;
     if (bytes == null) return;
+    final file = _file;
+    if (_isDesktop && file != null) {
+      final ok = await openImagePreviewWindow(
+        path: file.path,
+        title: widget.message.fileName,
+      );
+      if (ok) return;
+    }
+    if (!mounted) return;
     showDialog<void>(
       context: context,
       builder: (ctx) => Dialog(
@@ -158,11 +182,12 @@ class _ImageCardState extends State<_ImageCard> {
     final attachmentId = widget.message.attachmentId;
     if (attachmentId == null) return;
     try {
-      final file = await widget.app.attachments.downloadDecrypted(
-        conversationId: widget.message.conversationId,
-        attachmentId: attachmentId,
-        suggestedName: widget.message.fileName,
-      );
+      final file = _file ??
+          await widget.app.attachments.downloadDecrypted(
+            conversationId: widget.message.conversationId,
+            attachmentId: attachmentId,
+            suggestedName: widget.message.fileName,
+          );
       final path =
           await widget.app.attachments.saveAs(file, widget.message.fileName);
       if (!mounted) return;
@@ -203,8 +228,10 @@ class _ImageCardState extends State<_ImageCard> {
             children: [
               TextButton.icon(
                 onPressed: _showPreview,
-                icon: const Icon(Icons.visibility, size: 16),
-                label: const Text('查看'),
+                icon: Icon(
+                    _isDesktop ? Icons.open_in_new : Icons.visibility,
+                    size: 16),
+                label: Text(_isDesktop ? '新窗口查看' : '查看'),
               ),
               TextButton.icon(
                 onPressed: _save,

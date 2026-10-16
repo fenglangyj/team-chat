@@ -9,6 +9,7 @@ import '../models/models.dart';
 import '../services/attachment_service.dart';
 import '../services/chat_crypto.dart';
 import '../services/session.dart';
+import '../services/sound_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sweep_service.dart';
 import 'conversations_controller.dart';
@@ -18,6 +19,7 @@ enum AppPhase { booting, setup, login, unlock, ready }
 /// 应用级状态：配置 -> 登录/解锁 -> 就绪
 class AppState extends ChangeNotifier {
   static const String _configKey = 'teamchat.app_config';
+  static const String _soundKey = 'teamchat.sound_enabled';
 
   final SupabaseService supa = SupabaseService();
   late final AttachmentService attachments = AttachmentService(
@@ -33,11 +35,14 @@ class AppState extends ChangeNotifier {
   SweepService? sweep;
   String? error;
   bool busy = false;
+  bool soundEnabled = true;
 
   // ---------- 启动 ----------
 
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
+    soundEnabled = prefs.getBool(_soundKey) ?? true;
+    SoundService.instance.enabled = soundEnabled;
     config = AppConfig.fromStorageString(prefs.getString(_configKey));
     if (config == null) {
       phase = AppPhase.setup;
@@ -335,6 +340,14 @@ class AppState extends ChangeNotifier {
   }
 
   // ---------- 账号操作 ----------
+
+  Future<void> setSoundEnabled(bool value) async {
+    soundEnabled = value;
+    SoundService.instance.enabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_soundKey, value);
+    notifyListeners();
+  }
 
   Future<String?> changeNickname(String nickname) async {
     final s = session;

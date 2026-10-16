@@ -21,6 +21,7 @@ class ChatController extends ChangeNotifier {
   bool loading = false;
   bool sending = false;
   double? uploadProgress;
+  String? uploadName;
   String? error;
 
   RealtimeChannel? _channel;
@@ -140,6 +141,7 @@ class ChatController extends ChangeNotifier {
 
     sending = true;
     uploadProgress = 0;
+    uploadName = name;
     _safeNotify();
     try {
       final upload = await app.attachments.uploadEncrypted(
@@ -180,6 +182,7 @@ class ChatController extends ChangeNotifier {
     } finally {
       sending = false;
       uploadProgress = null;
+      uploadName = null;
       _safeNotify();
     }
   }
