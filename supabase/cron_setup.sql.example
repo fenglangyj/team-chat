@@ -2,8 +2,11 @@
 -- 可选：为 24 小时自动清扫配置服务端定时任务（pg_cron + pg_net）
 -- 即使没有任何客户端在线，也会每小时清理一次过期数据。
 --
--- 前置步骤（Supabase 控制台 → Database → Extensions）：
---   启用 pg_cron 与 pg_net 两个扩展。
+-- 前置步骤（二选一）：
+--   a. Supabase 控制台 → Database → Extensions：启用 pg_cron 与 pg_net；
+--   b. 或在 SQL Editor 执行（注意 pg_net 装到 extensions schema，避免安全告警）：
+--      create extension if not exists pg_cron;
+--      create extension if not exists pg_net with schema extensions;
 --
 -- 然后把下面的 YOUR-PROJECT 和 YOUR-ANON-KEY 换成你自己的值后，
 -- 在 SQL Editor 中执行一次即可。

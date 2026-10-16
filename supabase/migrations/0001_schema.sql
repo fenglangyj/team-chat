@@ -10,6 +10,7 @@
 create or replace function public.try_uuid(t text)
 returns uuid
 language plpgsql immutable
+set search_path = pg_catalog
 as $$
 begin
   return t::uuid;
