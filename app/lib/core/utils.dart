@@ -11,6 +11,17 @@ String randomHex(int byteLength) => randomBytes(byteLength)
     .map((b) => b.toRadixString(16).padLeft(2, '0'))
     .join();
 
+/// 生成规范的 UUID v4（带短横线）。
+/// 必须与 Postgres uuid 列读回的格式一致，否则存储路径会不匹配。
+String uuidV4() {
+  final bytes = randomBytes(16);
+  bytes[6] = (bytes[6] & 0x0F) | 0x40;
+  bytes[8] = (bytes[8] & 0x3F) | 0x80;
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
+
 String b64Encode(List<int> bytes) => base64Encode(bytes);
 
 Uint8List b64Decode(String text) => base64Decode(text);

@@ -50,7 +50,9 @@ class AttachmentService {
       throw StateError('会话密钥尚未就绪');
     }
 
-    final attachmentId = randomHex(16);
+    // 用规范 UUID（带短横线）：DB 的 uuid 列读回来是这个格式，
+    // 保证上传路径与下载路径完全一致
+    final attachmentId = uuidV4();
     final path = '$conversationId/$attachmentId.bin';
 
     await client().from(Db.attachments).insert({
