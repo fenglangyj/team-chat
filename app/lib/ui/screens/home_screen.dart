@@ -9,6 +9,7 @@ import '../../state/conversations_controller.dart';
 import '../widgets/avatar.dart';
 import 'chat_screen.dart';
 import 'directory_screen.dart';
+import 'group_create_screen.dart';
 import 'settings_screen.dart';
 
 /// 会话列表（桌面端：左侧列表 + 右侧聊天；移动端：列表 + 页面跳转）
@@ -38,25 +39,28 @@ class _HomeScreenState extends State<HomeScreen> {
     await app.conversations?.refreshPreviews();
   }
 
+  Future<void> _openConversation(
+      BuildContext context, Conversation conv,
+      {required bool wide}) async {
+    if (wide) {
+      setState(() => _selectedId = conv.id);
+    } else {
+      await _openChat(context, conv);
+    }
+  }
+
   void _onConversationTap(
       BuildContext context, ConversationsController convos, Conversation conv,
       {required bool wide}) {
-    if (wide) {
-      setState(() => _selectedId = conv.id);
-      return;
-    }
-    _openChat(context, conv);
+    _openConversation(context, conv, wide: wide);
   }
 
-  /// 打开团队成员（通讯录）：发起私聊或新建群聊
-  Future<void> _openDirectory(BuildContext context,
-      {required bool wide}) async {
-    final result = await Navigator.of(context).push<Object>(
+  // ---------- 菜单动作 ----------
+
+  Future<void> _startDirect(BuildContext context, {required bool wide}) async {
+    final result = await Navigator.of(context).push<MemberProfile>(
       MaterialPageRoute(
-        builder: (_) => const DirectoryScreen(
-          title: '团队成员',
-          showGroupCreate: true,
-        ),
+        builder: (_) => const DirectoryScreen(title: '发起私聊'),
       ),
     );
     if (result == null || !context.mounted) return;
@@ -64,18 +68,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final convos = app.conversations;
     if (convos == null) return;
     try {
-      Conversation? conv;
-      if (result is Conversation) {
-        conv = result;
-      } else if (result is MemberProfile) {
-        conv = await convos.startDirect(result);
-      }
-      if (conv == null || !context.mounted) return;
-      if (wide) {
-        setState(() => _selectedId = conv!.id);
-      } else {
-        _openChat(context, conv);
-      }
+      final conv = await convos.startDirect(result);
+      if (!context.mounted) return;
+      await _openConversation(context, conv, wide: wide);
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
@@ -83,12 +78,75 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildDirectoryTile(BuildContext context, {required bool wide}) {
-    return ListTile(
-      leading: const Icon(Icons.people_alt_outlined),
-      title: const Text('团队成员'),
-      subtitle: const Text('发起私聊 / 新建群聊'),
-      onTap: () => _openDirectory(context, wide: wide),
+  Future<void> _createGroup(BuildContext context, {required bool wide}) async {
+    final conv = await Navigator.of(context).push<Conversation>(
+      MaterialPageRoute(builder: (_) => const GroupCreateScreen()),
+    );
+    if (conv == null || !context.mounted) return;
+    await _openConversation(context, conv, wide: wide);
+  }
+
+  Widget _buildMenu(BuildContext context, {required bool wide}) {
+    return PopupMenuButton<String>(
+      tooltip: '菜单',
+      icon: const Icon(Icons.more_vert),
+      onSelected: (value) {
+        switch (value) {
+          case 'direct':
+            _startDirect(context, wide: wide);
+          case 'group':
+            _createGroup(context, wide: wide);
+          case 'settings':
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          case 'logout':
+            _confirmSignOut(context);
+        }
+      },
+      itemBuilder: (_) => const [
+        PopupMenuItem(
+          value: 'direct',
+          child: Row(
+            children: [
+              Icon(Icons.person_outline, size: 18),
+              SizedBox(width: 10),
+              Text('发起私聊'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'group',
+          child: Row(
+            children: [
+              Icon(Icons.group_add_outlined, size: 18),
+              SizedBox(width: 10),
+              Text('新建群聊'),
+            ],
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'settings',
+          child: Row(
+            children: [
+              Icon(Icons.settings_outlined, size: 18),
+              SizedBox(width: 10),
+              Text('设置'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'logout',
+          child: Row(
+            children: [
+              Icon(Icons.logout, size: 18),
+              SizedBox(width: 10),
+              Text('退出登录'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -113,20 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
-              actions: [
-                IconButton(
-                  tooltip: '设置',
-                  icon: const Icon(Icons.settings_outlined),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '退出登录',
-                  icon: const Icon(Icons.logout),
-                  onPressed: () => _confirmSignOut(context),
-                ),
-              ],
+              actions: [_buildMenu(context, wide: false)],
             ),
       body: convos == null
           ? const Center(child: CircularProgressIndicator())
@@ -140,17 +185,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildNarrow(BuildContext context, ConversationsController convos) {
-    return Column(
-      children: [
-        _buildDirectoryTile(context, wide: false),
-        const Divider(height: 1),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => _refresh(convos),
-            child: _buildList(context, convos, wide: false),
-          ),
-        ),
-      ],
+    return RefreshIndicator(
+      onRefresh: () => _refresh(convos),
+      child: _buildList(context, convos, wide: false),
     );
   }
 
@@ -189,7 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Material(
           color: scheme.surface,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+            padding: const EdgeInsets.fromLTRB(16, 10, 4, 10),
             child: Row(
               children: [
                 Icon(Icons.forum_outlined, color: scheme.primary, size: 22),
@@ -199,24 +236,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
-                IconButton(
-                  tooltip: '设置',
-                  icon: const Icon(Icons.settings_outlined, size: 20),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '退出登录',
-                  icon: const Icon(Icons.logout, size: 20),
-                  onPressed: () => _confirmSignOut(context),
-                ),
+                _buildMenu(context, wide: true),
               ],
             ),
           ),
         ),
-        const Divider(height: 1),
-        _buildDirectoryTile(context, wide: true),
         const Divider(height: 1),
         Expanded(
           child: RefreshIndicator(
@@ -245,7 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
           SizedBox(height: 160),
           Center(
             child: Text(
-              '暂无会话\n点击右下角 + 开始聊天',
+              '暂无会话\n点击右上角菜单开始聊天',
               textAlign: TextAlign.center,
               style: TextStyle(height: 1.6),
             ),
@@ -265,8 +289,8 @@ class _HomeScreenState extends State<HomeScreen> {
         final hasKey = convos.hasKeyFor(conv.id);
         final unread = convos.unreadOf(conv.id);
         final selected = wide && conv.id == _selectedId;
-
         final isGroup = conv.kind == ConversationKind.group;
+
         return ListTile(
           selected: selected,
           selectedTileColor: scheme.primary.withValues(alpha: 0.08),

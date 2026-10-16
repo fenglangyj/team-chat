@@ -21,9 +21,10 @@ class ConversationsController extends ChangeNotifier {
   final Map<String, String> _groupNames = {};
   final Set<String> _keyFlights = {};
 
-  /// 未读消息数（仅统计对方发来的、且不在当前打开会话的消息）
+  /// 未读消息数（仅统计对方发来的、且用户此刻没有在看的消息）
   final Map<String, int> unreadCounts = {};
   String? _activeConversationId;
+  bool _windowFocused = true;
 
   int unreadOf(String conversationId) => unreadCounts[conversationId] ?? 0;
 
@@ -32,6 +33,16 @@ class ConversationsController extends ChangeNotifier {
     _activeConversationId = conversationId;
     if (conversationId != null && unreadOf(conversationId) != 0) {
       unreadCounts[conversationId] = 0;
+      notifyListeners();
+    }
+  }
+
+  /// 窗口重新获得焦点：正在查看的会话自动清零未读
+  void markWindowFocused() {
+    _windowFocused = true;
+    final id = _activeConversationId;
+    if (id != null && unreadOf(id) != 0) {
+      unreadCounts[id] = 0;
       notifyListeners();
     }
   }
@@ -450,8 +461,10 @@ class ConversationsController extends ChangeNotifier {
           callback: (payload) async {
             final m = Message.fromRow(payload.newRecord);
             lastMessages[m.conversationId] = m;
-            if (m.senderId != session.me.id &&
-                m.conversationId != _activeConversationId) {
+            // 正在看着（当前会话打开且窗口聚焦）的消息不计数不响铃
+            final viewing = m.conversationId == _activeConversationId &&
+                _windowFocused;
+            if (m.senderId != session.me.id && !viewing) {
               unreadCounts[m.conversationId] =
                   (unreadCounts[m.conversationId] ?? 0) + 1;
               SoundService.instance.play();

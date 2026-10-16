@@ -2,6 +2,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
+import 'package:window_manager/window_manager.dart';
 
 import '../core/constants.dart';
 import '../core/utils.dart';
@@ -15,6 +16,18 @@ import '../services/sweep_service.dart';
 import 'conversations_controller.dart';
 
 enum AppPhase { booting, setup, login, unlock, ready }
+
+/// 桌面端窗口焦点监听：重新聚焦时通知会话控制器清零当前会话未读
+class _AppFocusListener with WindowListener {
+  final AppState app;
+
+  _AppFocusListener(this.app);
+
+  @override
+  void onWindowFocus() {
+    app.conversations?.markWindowFocused();
+  }
+}
 
 /// 应用级状态：配置 -> 登录/解锁 -> 就绪
 class AppState extends ChangeNotifier {
@@ -279,12 +292,38 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  static bool get _isDesktop =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux);
+
+  _AppFocusListener? _focusListener;
+
+  void _attachFocusListener() {
+    if (!_isDesktop || _focusListener != null) return;
+    _focusListener = _AppFocusListener(this);
+    try {
+      windowManager.addListener(_focusListener!);
+    } catch (_) {}
+  }
+
+  void _detachFocusListener() {
+    final listener = _focusListener;
+    if (listener == null) return;
+    try {
+      windowManager.removeListener(listener);
+    } catch (_) {}
+    _focusListener = null;
+  }
+
   Future<void> _finishLogin() async {
     try {
       await _ensureDefaultGroup();
     } catch (_) {
       // 全员群建立失败不阻塞登录，重进应用时会重试
     }
+    _attachFocusListener();
     sweep = SweepService(supa)..start();
     final controller = ConversationsController(this);
     conversations = controller;
@@ -418,6 +457,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    _detachFocusListener();
     sweep?.stop();
     sweep = null;
     conversations?.dispose();
